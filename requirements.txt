@@ -1,4 +1,8 @@
+# Server dependencies
 falcon
 pymongo
 uvicorn
+
+# Client dependencies
 requests
+tabulate
