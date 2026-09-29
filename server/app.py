@@ -11,6 +11,7 @@ from resources import (
     SetupResource,
     DataResource,
     ItemResource,
+    NameResource,
 )
 
 # Configuración de logging
@@ -69,16 +70,21 @@ def create_app():
     setup_resource = SetupResource(connection)
     data_resource = DataResource(connection)
     item_resource = ItemResource(connection)
+    name_resource = NameResource(connection)
 
     # Registro de rutas REST
     app.add_route('/setup', setup_resource)
     app.add_route('/data', data_resource)
+    app.add_route('/data/name/{name}', name_resource)
+    app.add_route('/data/nombre/{name}', name_resource)
     app.add_route('/data/{item_id}', item_resource)
 
     log.info("Rutas registradas:")
     log.info("  POST   /setup")
     log.info("  GET    /data")
     log.info("  POST   /data")
+    log.info("  GET    /data/name/{name}")
+    log.info("  GET    /data/nombre/{name}")
     log.info("  GET    /data/{item_id}")
     log.info("  DELETE /data/{item_id}")
 

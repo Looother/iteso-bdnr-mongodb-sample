@@ -17,21 +17,21 @@ class SetupResource:
     def __init__(self, conn):
         self.conn = conn
 
-    # async def on_post(self, req, resp):
-    #     """POST /setup"""
-    #     try:
-    #         indexes = model.create_indexes(self.conn.db)
-    #         resp.media = {
-    #             'status': 'success',
-    #             'message': f'Base de datos {self.conn.database_name} e índices creados exitosamente',
-    #             'indexes': indexes,
-    #             'note': 'MongoDB no requiere esquema rígido; los índices definen el rendimiento de consultas.',
-    #         }
-    #         resp.status = falcon.HTTP_201
-    #     except Exception as e:
-    #         log.exception("Fallo al ejecutar setup")
-    #         resp.media = {'status': 'error', 'message': str(e)}
-    #         resp.status = falcon.HTTP_500
+    async def on_post(self, req, resp):
+        """POST /setup"""
+        try:
+            indexes = model.create_indexes(self.conn.db)
+            resp.media = {
+                'status': 'success',
+                'message': f'Base de datos {self.conn.database_name} e índices creados exitosamente',
+                'indexes': indexes,
+                'note': 'MongoDB no requiere esquema rígido; los índices definen el rendimiento de consultas.',
+            }
+            resp.status = falcon.HTTP_201
+        except Exception as e:
+            log.exception("Fallo al ejecutar setup")
+            resp.media = {'status': 'error', 'message': str(e)}
+            resp.status = falcon.HTTP_500
 
 
 class DataResource:
@@ -44,10 +44,14 @@ class DataResource:
         self.conn = conn
 
     async def on_get(self, req, resp):
-        """GET /data — Consulta registros con límite opcional"""
+        """GET /data — Consulta registros con límite opcional y filtro por nombre"""
         try:
+            name = req.get_param('name') or req.get_param('nombre')
             limit = req.get_param_as_int('limit') or 100
-            items = model.get_all_records(self.conn.db, limit=limit)
+            if name:
+                items = model.get_records_by_name(self.conn.db, name, limit=limit)
+            else:
+                items = model.get_all_records(self.conn.db, limit=limit)
             resp.media = {'count': len(items), 'data': items}
         except Exception as e:
             log.exception("Error al consultar registros")
@@ -105,5 +109,28 @@ class ItemResource:
             resp.media = {'status': 'success', 'message': f'Registro {item_id} eliminado exitosamente'}
         except Exception as e:
             log.exception(f"Error al eliminar registro {item_id}")
+            resp.media = {'error': str(e)}
+            resp.status = falcon.HTTP_500
+
+
+class NameResource:
+    """
+    Recurso para consultar documentos específicos por nombre.
+    """
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def on_get(self, req, resp, name):
+        """GET /data/name/{name} — Consulta un documento por nombre"""
+        try:
+            item = model.get_record_by_name(self.conn.db, name)
+            if not item:
+                resp.media = {'error': f'Registro con nombre "{name}" no encontrado'}
+                resp.status = falcon.HTTP_404
+                return
+            resp.media = {'status': 'success', 'item': item}
+        except Exception as e:
+            log.exception(f"Error al consultar registro por nombre {name}")
             resp.media = {'error': str(e)}
             resp.status = falcon.HTTP_500

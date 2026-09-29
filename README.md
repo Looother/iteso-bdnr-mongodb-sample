@@ -123,32 +123,32 @@ El cliente por consola ofrece un menú en bucle que permite probar de inmediato 
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `GET`  | `/health` | Verifica la salud del servicio y el estado de la conexión a MongoDB |
 | `POST` | `/setup`  | Crea los índices configurados en `ALL_INDEXES` |
-| `GET`  | `/data`   | Obtiene la lista de documentos almacenados (parámetro opcional: `?limit=N`) |
+| `GET`  | `/data`   | Obtiene la lista de documentos almacenados (parámetro opcional: `?limit=N` o `?nombre=X`) |
 | `POST` | `/data`   | Inserta un nuevo documento directamente a partir de un cuerpo JSON |
 | `GET`  | `/data/{id}` | Consulta un documento específico por su `_id` |
+| `GET`  | `/data/name/{name}` | Consulta un documento específico por su nombre |
 | `DELETE` | `/data/{id}` | Elimina un documento específico por su `_id` |
 
 ### Ejemplos con `curl`
 
 ```bash
-# 1. Comprobar salud del servicio
-curl http://localhost:8001/health
-
-# 2. Inicializar índices
+# 1. Inicializar índices
 curl -X POST http://localhost:8001/setup
 
-# 3. Consultar documentos existentes
+# 2. Consultar documentos existentes
 curl http://localhost:8001/data
 
-# 4. Insertar un documento
+# 3. Insertar un documento
 curl -X POST http://localhost:8001/data \
   -H "Content-Type: application/json" \
   -d '{"nombre": "Elemento A", "categoria": "General", "valor": "99.9"}'
 
-# 5. Consultar un documento por ID
+# 4. Consultar un documento por ID
 curl http://localhost:8001/data/<id>
+
+# 5. Consultar un documento por nombre
+curl http://localhost:8001/data/name/Elemento%20A
 
 # 6. Eliminar un documento por ID
 curl -X DELETE http://localhost:8001/data/<id>

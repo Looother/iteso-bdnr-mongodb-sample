@@ -140,6 +140,32 @@ def get_record_by_id(db, item_id: str, collection_name=None):
     return doc
 
 
+def get_record_by_name(db, name: str, collection_name=None):
+    """Consulta un registro por su nombre (campo 'nombre' o 'name')."""
+    target = collection_name or DEFAULT_COLLECTION
+    coll = db[target]
+
+    query = {'$or': [{'nombre': name}, {'name': name}]}
+    doc = coll.find_one(query)
+    if doc:
+        doc['_id'] = str(doc['_id'])
+    return doc
+
+
+def get_records_by_name(db, name: str, collection_name=None, limit=100):
+    """Consulta todos los registros que coincidan con el nombre (campo 'nombre' o 'name')."""
+    target = collection_name or DEFAULT_COLLECTION
+    coll = db[target]
+
+    query = {'$or': [{'nombre': name}, {'name': name}]}
+    cursor = coll.find(query).limit(limit)
+    items = []
+    for doc in cursor:
+        doc['_id'] = str(doc['_id'])
+        items.append(doc)
+    return items
+
+
 def delete_record_by_id(db, item_id: str, collection_name=None):
     """Elimina un registro por su ID (ObjectId o identificador exacto)."""
     target = collection_name or DEFAULT_COLLECTION
