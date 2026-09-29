@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Menú simple de consola en Python para realizar peticiones REST (Esqueleto Genérico).
+Menú simple de consola en Python para realizar peticiones REST.
 Permite interactuar de forma interactiva y llamar a funciones para probar la API con MongoDB.
 """
 import os

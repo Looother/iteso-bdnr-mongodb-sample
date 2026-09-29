@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capa de modelo de base de datos para MongoDB (Esqueleto Genérico).
+Capa de modelo de base de datos para MongoDB.
 
 Plantilla para implementar fácilmente cualquier modelo de datos basado en documentos.
 Permite insertar y consultar diccionarios directamente sin esquemas rígidos.
@@ -70,25 +70,25 @@ class MongoConnection:
 
 DEFAULT_COLLECTION = 'sample_items'
 
-# Lista de configuraciones de índices de ejemplo: (colección, campos_o_clave, opciones)
-ALL_INDEXES = [
-    (DEFAULT_COLLECTION, [('nombre', 1)], {'name': 'idx_nombre'}),
-]
+# # Lista de configuraciones de índices de ejemplo: (colección, campos_o_clave, opciones)
+# ALL_INDEXES = [
+#     (DEFAULT_COLLECTION, [('nombre', 1)], {'name': 'idx_nombre'}),
+# ]
 
 
-def create_indexes(db):
-    """
-    Crea los índices configurados en ALL_INDEXES.
-    En MongoDB, los índices definen el rendimiento de las consultas y
-    representan el equivalente al DDL en bases de datos relacionales/Cassandra.
-    """
-    created = []
-    for coll_name, keys, options in ALL_INDEXES:
-        log.info(f"Creando índice en colección '{coll_name}': {keys}")
-        coll = db[coll_name]
-        idx_name = coll.create_index(keys, **options)
-        created.append({'collection': coll_name, 'index': idx_name})
-    return created
+# def create_indexes(db):
+#     """
+#     Crea los índices configurados en ALL_INDEXES.
+#     En MongoDB, los índices definen el rendimiento de las consultas y
+#     representan el equivalente al DDL en bases de datos relacionales/Cassandra.
+#     """
+#     created = []
+#     for coll_name, keys, options in ALL_INDEXES:
+#         log.info(f"Creando índice en colección '{coll_name}': {keys}")
+#         coll = db[coll_name]
+#         idx_name = coll.create_index(keys, **options)
+#         created.append({'collection': coll_name, 'index': idx_name})
+#     return created
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Aplicación Falcon ASGI para la API REST con MongoDB (Esqueleto Genérico).
+Aplicación Falcon ASGI para la API REST con MongoDB.
 """
 import logging
 import os
@@ -8,7 +8,6 @@ import falcon.asgi
 
 from model import MongoConnection
 from resources import (
-    HealthResource,
     SetupResource,
     DataResource,
     ItemResource,
@@ -67,19 +66,16 @@ def create_app():
     ])
 
     # Instanciación de recursos
-    health_resource = HealthResource(connection)
     setup_resource = SetupResource(connection)
     data_resource = DataResource(connection)
     item_resource = ItemResource(connection)
 
     # Registro de rutas REST
-    app.add_route('/health', health_resource)
     app.add_route('/setup', setup_resource)
     app.add_route('/data', data_resource)
     app.add_route('/data/{item_id}', item_resource)
 
     log.info("Rutas registradas:")
-    log.info("  GET    /health")
     log.info("  POST   /setup")
     log.info("  GET    /data")
     log.info("  POST   /data")

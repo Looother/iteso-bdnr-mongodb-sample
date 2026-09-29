@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Clases de recursos Falcon para la API REST con MongoDB (Esqueleto Genérico).
+Clases de recursos Falcon para la API REST con MongoDB.
 Expone endpoints estándar para comprobación de salud, inicialización de índices y CRUD base.
 """
 import logging
@@ -10,20 +10,6 @@ import model
 log = logging.getLogger(__name__)
 
 
-class HealthResource:
-    """Endpoint para verificar el estado de salud de la API y de MongoDB."""
-
-    def __init__(self, conn):
-        self.conn = conn
-
-    async def on_get(self, req, resp):
-        """GET /health"""
-        if self.conn.is_connected():
-            resp.media = {'status': 'healthy', 'database': 'connected'}
-        else:
-            resp.media = {'status': 'unhealthy', 'database': 'disconnected'}
-            resp.status = falcon.HTTP_503
-
 
 class SetupResource:
     """Endpoint administrativo para crear colecciones e índices en MongoDB."""
@@ -31,21 +17,21 @@ class SetupResource:
     def __init__(self, conn):
         self.conn = conn
 
-    async def on_post(self, req, resp):
-        """POST /setup"""
-        try:
-            indexes = model.create_indexes(self.conn.db)
-            resp.media = {
-                'status': 'success',
-                'message': f'Base de datos {self.conn.database_name} e índices creados exitosamente',
-                'indexes': indexes,
-                'note': 'MongoDB no requiere esquema rígido; los índices definen el rendimiento de consultas.',
-            }
-            resp.status = falcon.HTTP_201
-        except Exception as e:
-            log.exception("Fallo al ejecutar setup")
-            resp.media = {'status': 'error', 'message': str(e)}
-            resp.status = falcon.HTTP_500
+    # async def on_post(self, req, resp):
+    #     """POST /setup"""
+    #     try:
+    #         indexes = model.create_indexes(self.conn.db)
+    #         resp.media = {
+    #             'status': 'success',
+    #             'message': f'Base de datos {self.conn.database_name} e índices creados exitosamente',
+    #             'indexes': indexes,
+    #             'note': 'MongoDB no requiere esquema rígido; los índices definen el rendimiento de consultas.',
+    #         }
+    #         resp.status = falcon.HTTP_201
+    #     except Exception as e:
+    #         log.exception("Fallo al ejecutar setup")
+    #         resp.media = {'status': 'error', 'message': str(e)}
+    #         resp.status = falcon.HTTP_500
 
 
 class DataResource:
