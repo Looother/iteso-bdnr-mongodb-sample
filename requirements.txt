@@ -5,4 +5,3 @@ uvicorn
 
 # Client dependencies
 requests
-tabulate

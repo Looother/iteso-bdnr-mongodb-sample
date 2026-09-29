@@ -1,306 +1,123 @@
 #!/usr/bin/env python3
 """
-Falcon resource classes for the Books REST API.
+Clases de recursos Falcon para la API REST con MongoDB (Esqueleto Genérico).
+Expone endpoints estándar para comprobación de salud, inicialización de índices y CRUD base.
 """
-import csv
 import logging
-import os
-
 import falcon
-from bson.objectid import ObjectId
-from pymongo import ASCENDING, TEXT
+import model
 
 log = logging.getLogger(__name__)
 
-DATA_DIR = os.getenv('DATA_DIR', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'))
-
 
 class HealthResource:
+    """Endpoint para verificar el estado de salud de la API y de MongoDB."""
 
-    def __init__(self, db):
-        self.db = db
+    def __init__(self, conn):
+        self.conn = conn
 
     async def on_get(self, req, resp):
         """GET /health"""
-        try:
-            self.db.command('ping')
+        if self.conn.is_connected():
             resp.media = {'status': 'healthy', 'database': 'connected'}
-        except Exception as e:
-            log.exception("Health check failed")
-            resp.media = {'status': 'unhealthy', 'error': str(e)}
+        else:
+            resp.media = {'status': 'unhealthy', 'database': 'disconnected'}
             resp.status = falcon.HTTP_503
 
 
 class SetupResource:
-    """
-    Admin — create indexes on the books collection.
+    """Endpoint administrativo para crear colecciones e índices en MongoDB."""
 
-    MongoDB is schema-less: any document can be inserted without prior setup.
-    Indexes are the closest equivalent to DDL — they don't change what can be
-    stored, but they define which queries run efficiently.
-
-    Without indexes, every query scans the entire collection (full collection scan).
-    With indexes, MongoDB can jump directly to matching documents.
-    """
-
-    def __init__(self, db):
-        self.db = db
+    def __init__(self, conn):
+        self.conn = conn
 
     async def on_post(self, req, resp):
-        """POST /setup — create collection indexes"""
+        """POST /setup"""
         try:
-            collection = self.db.books
-
-            indexes_created = []
-
-            # Index on average_rating — supports: GET /books?rating=4.5
-            collection.create_index([('average_rating', ASCENDING)], name='idx_rating')
-            indexes_created.append({
-                'index': 'idx_rating',
-                'field': 'average_rating',
-                'type': 'ascending',
-                'supports': 'GET /books?rating=N  (filter by minimum rating)',
-            })
-
-            # Index on language_code — supports: GET /books?language=eng
-            collection.create_index([('language_code', ASCENDING)], name='idx_language')
-            indexes_created.append({
-                'index': 'idx_language',
-                'field': 'language_code',
-                'type': 'ascending',
-                'supports': 'GET /books?language=eng  (filter by language)',
-            })
-
-            # Text index on title + authors — supports full-text search
-            collection.create_index(
-                [('title', TEXT), ('authors', TEXT)],
-                name='idx_text_search'
-            )
-            indexes_created.append({
-                'index': 'idx_text_search',
-                'fields': ['title', 'authors'],
-                'type': 'text',
-                'supports': 'GET /books?search=...  (full-text search)',
-            })
-
+            indexes = model.create_indexes(self.conn.db)
             resp.media = {
                 'status': 'success',
-                'message': 'Indexes created on books collection',
-                'indexes': indexes_created,
-                'note': 'MongoDB is schema-less — indexes define query performance, not structure',
+                'message': f'Base de datos {self.conn.database_name} e índices creados exitosamente',
+                'indexes': indexes,
+                'note': 'MongoDB no requiere esquema rígido; los índices definen el rendimiento de consultas.',
             }
             resp.status = falcon.HTTP_201
-            log.info(f"Setup: {len(indexes_created)} indexes created")
-
         except Exception as e:
-            log.exception("Setup failed")
+            log.exception("Fallo al ejecutar setup")
             resp.media = {'status': 'error', 'message': str(e)}
             resp.status = falcon.HTTP_500
 
 
-class SeedResource:
+class DataResource:
     """
-    Admin — load books from CSV into the database via the real business endpoint.
-
-    Reads books.csv and inserts each book through the same validation and insert
-    logic used by POST /books — not a raw bulk insert bypassing the application.
+    Recurso plantilla para operaciones del modelo de datos en MongoDB.
+    Personalizable según los requerimientos de la aplicación.
     """
 
-    def __init__(self, db):
-        self.db = db
-
-    async def on_post(self, req, resp):
-        """POST /seed  body: { "limit": 100 }"""
-        try:
-            body = await req.get_media() or {}
-            limit = int(body.get('limit', 100))
-
-            csv_path = os.path.join(DATA_DIR, 'books.csv')
-            inserted = 0
-            skipped = 0
-
-            with open(csv_path, newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if inserted >= limit:
-                        break
-                    try:
-                        book = _parse_book_row(row)
-                        self.db.books.insert_one(book)
-                        inserted += 1
-                    except Exception as e:
-                        log.warning(f"Skipping row: {e}")
-                        skipped += 1
-
-            resp.media = {
-                'status': 'success',
-                'inserted': inserted,
-                'skipped': skipped,
-            }
-            resp.status = falcon.HTTP_201
-            log.info(f"Seed: {inserted} books inserted, {skipped} skipped")
-
-        except FileNotFoundError:
-            resp.media = {'error': f'books.csv not found in {DATA_DIR}'}
-            resp.status = falcon.HTTP_500
-        except Exception as e:
-            log.exception("Seed failed")
-            resp.media = {'status': 'error', 'message': str(e)}
-            resp.status = falcon.HTTP_500
-
-
-class BooksResource:
-
-    def __init__(self, db):
-        self.db = db
+    def __init__(self, conn):
+        self.conn = conn
 
     async def on_get(self, req, resp):
-        """
-        GET /books — list books with optional filters.
-
-        Query params: rating (min), language, search (full-text)
-
-        Each filter uses a different index created by POST /setup.
-        """
-        rating = req.get_param_as_float('rating')
-        language = req.get_param('language')
-        search = req.get_param('search')
-
-        query = {}
-        if rating is not None:
-            query['average_rating'] = {'$gte': rating}
-        if language:
-            query['language_code'] = language
-        if search:
-            query['$text'] = {'$search': search}
-
+        """GET /data — Consulta registros con límite opcional"""
         try:
-            books = list(self.db.books.find(query))
-            for book in books:
-                book['_id'] = str(book['_id'])
-            resp.media = {'books': books, 'count': len(books)}
-            resp.status = falcon.HTTP_200
-            log.info(f"Listed {len(books)} books (filters: rating={rating}, language={language}, search={search})")
+            limit = req.get_param_as_int('limit') or 100
+            items = model.get_all_records(self.conn.db, limit=limit)
+            resp.media = {'count': len(items), 'data': items}
         except Exception as e:
-            log.exception("Failed to list books")
+            log.exception("Error al consultar registros")
             resp.media = {'error': str(e)}
             resp.status = falcon.HTTP_500
 
     async def on_post(self, req, resp):
-        """POST /books — add a new book"""
+        """POST /data — Inserta un documento directamente desde el JSON recibido"""
         try:
-            data = await req.get_media()
-            book = _validate_book(data)
-            result = self.db.books.insert_one(book)
-            book['_id'] = str(result.inserted_id)
-            resp.media = book
+            body = await req.get_media() or {}
+            if not body:
+                resp.media = {'error': "Cuerpo JSON requerido"}
+                resp.status = falcon.HTTP_400
+                return
+
+            resultado = model.insert_record(self.conn.db, body)
+            resp.media = {'status': 'created', 'item': resultado}
             resp.status = falcon.HTTP_201
-            log.info(f"Book added: {book['title']}")
-        except falcon.HTTPBadRequest:
-            raise
         except Exception as e:
-            log.exception("Failed to add book")
+            log.exception("Error al insertar registro")
             resp.media = {'error': str(e)}
-            resp.status = falcon.HTTP_400
+            resp.status = falcon.HTTP_500
 
 
-class BookResource:
+class ItemResource:
+    """
+    Recurso para consultar o eliminar documentos específicos por ID.
+    """
 
-    def __init__(self, db):
-        self.db = db
+    def __init__(self, conn):
+        self.conn = conn
 
-    async def on_get(self, req, resp, book_id):
-        """GET /books/{id}"""
+    async def on_get(self, req, resp, item_id):
+        """GET /data/{item_id} — Consulta un documento específico"""
         try:
-            book = self.db.books.find_one({'_id': ObjectId(book_id)})
-            if not book:
-                resp.media = {'error': 'Book not found'}
+            item = model.get_record_by_id(self.conn.db, item_id)
+            if not item:
+                resp.media = {'error': f'Registro con ID {item_id} no encontrado'}
                 resp.status = falcon.HTTP_404
                 return
-            book['_id'] = str(book['_id'])
-            resp.media = book
+            resp.media = {'status': 'success', 'item': item}
         except Exception as e:
+            log.exception(f"Error al consultar registro {item_id}")
             resp.media = {'error': str(e)}
-            resp.status = falcon.HTTP_400
+            resp.status = falcon.HTTP_500
 
-    async def on_put(self, req, resp, book_id):
-        """PUT /books/{id} — update a book"""
+    async def on_delete(self, req, resp, item_id):
+        """DELETE /data/{item_id} — Elimina un documento específico"""
         try:
-            data = await req.get_media()
-            book = _validate_book(data)
-            result = self.db.books.update_one({'_id': ObjectId(book_id)}, {'$set': book})
-            if not result.matched_count:
-                resp.media = {'error': 'Book not found'}
+            deleted = model.delete_record_by_id(self.conn.db, item_id)
+            if not deleted:
+                resp.media = {'error': f'Registro con ID {item_id} no encontrado'}
                 resp.status = falcon.HTTP_404
                 return
-            resp.media = {'status': 'success', 'message': 'Book updated'}
-        except falcon.HTTPBadRequest:
-            raise
+            resp.media = {'status': 'success', 'message': f'Registro {item_id} eliminado exitosamente'}
         except Exception as e:
+            log.exception(f"Error al eliminar registro {item_id}")
             resp.media = {'error': str(e)}
-            resp.status = falcon.HTTP_400
-
-    async def on_delete(self, req, resp, book_id):
-        """DELETE /books/{id}"""
-        try:
-            result = self.db.books.delete_one({'_id': ObjectId(book_id)})
-            if not result.deleted_count:
-                resp.media = {'error': 'Book not found'}
-                resp.status = falcon.HTTP_404
-                return
-            resp.media = {'status': 'success', 'message': 'Book deleted'}
-        except Exception as e:
-            resp.media = {'error': str(e)}
-            resp.status = falcon.HTTP_400
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-BOOK_FIELDS = {
-    'title': str,
-    'authors': list,
-    'average_rating': float,
-    'isbn': str,
-    'isbn13': str,
-    'language_code': str,
-    'num_pages': int,
-    'ratings_count': int,
-    'text_reviews_count': int,
-    'publication_date': str,
-    'publisher': str,
-}
-
-
-def _validate_book(data):
-    """Validate and coerce book fields."""
-    book = {}
-    for field, field_type in BOOK_FIELDS.items():
-        if field not in data:
-            raise falcon.HTTPBadRequest(title='Invalid data', description=f'{field} is required')
-        try:
-            book[field] = field_type(data[field]) if field_type != list else list(data[field])
-        except (ValueError, TypeError):
-            raise falcon.HTTPBadRequest(
-                title='Invalid data',
-                description=f'{field} must be {field_type.__name__}'
-            )
-    return book
-
-
-def _parse_book_row(row):
-    """Parse a CSV row into a book document."""
-    return {
-        'title': row['title'],
-        'authors': [a.strip() for a in row['authors'].split('/')],
-        'average_rating': float(row['average_rating']),
-        'isbn': row['isbn'],
-        'isbn13': row['isbn13'],
-        'language_code': row['language_code'],
-        'num_pages': int(row['num_pages']) if row['num_pages'] else 0,
-        'ratings_count': int(row['ratings_count']) if row['ratings_count'] else 0,
-        'text_reviews_count': int(row['text_reviews_count']) if row['text_reviews_count'] else 0,
-        'publication_date': row['publication_date'],
-        'publisher': row['publisher'],
-    }
+            resp.status = falcon.HTTP_500

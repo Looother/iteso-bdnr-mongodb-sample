@@ -1,187 +1,174 @@
-# ITESO BDNR - MongoDB Sample
+# ITESO BDNR - MongoDB Sample (Rama Esqueleto)
 
-A sample bookstore application demonstrating MongoDB document patterns with a REST API architecture.
+Plantilla y arquitectura base modular diseñada para implementar de forma sencilla cualquier modelo de datos en MongoDB, utilizando una arquitectura cliente-servidor con una API REST en Python (Falcon ASGI) y un cliente de consola interactivo.
 
-## Architecture
+---
+
+## Arquitectura
 
 ```
-┌────────────┐       ┌────────────┐       ┌────────────┐
-│   Client   │ HTTP  │   Server   │       │  MongoDB   │
-│   (CLI)    │ ────► │ (REST API) │ ────► │  (Docker)  │
-└────────────┘       └────────────┘       └────────────┘
-     client/              server/           port 27017
+┌────────────────────────┐       ┌────────────────────────┐       ┌────────────────────────┐
+│     Cliente Python     │ HTTP  │        Servidor        │ PyMongo│        MongoDB         │
+│    (client/menu.py)    │ ────► │      (API REST /       │ ────►  │     (Docker / Nodo)    │
+│                        │       │      Falcon ASGI)      │       │                        │
+└────────────────────────┘       └────────────────────────┘       └────────────────────────┘
+         client/                          server/                         puerto 27017
 ```
 
-## Project Structure
+---
+
+## Estructura del Proyecto
 
 ```
 iteso-bdnr-mongodb-sample/
-├── server/
-│   ├── app.py          # Falcon application and routes
-│   └── resources.py    # REST endpoint handlers
 ├── client/
-│   └── cli.py          # Command-line client
-├── data/
-│   └── books.csv       # Book dataset (~11k books)
-├── requirements.txt
+│   └── menu.py         # Menú interactivo de consola para realizar peticiones REST
+├── server/
+│   ├── app.py          # Configuración de la aplicación Falcon ASGI y rutas
+│   ├── resources.py    # Controladores de endpoints REST (Health, Setup, Data, Item)
+│   └── model.py        # Conexión a MongoDB, creación de índices y operaciones CRUD
+├── requirements.txt    # Dependencias del proyecto (servidor y cliente)
 └── README.md
 ```
 
-## Key MongoDB Concept: Schema-less + Indexes
+---
 
-MongoDB does not require a schema — any document can be inserted without prior table definitions. **Indexes** are the closest equivalent to DDL:
+## Cómo implementar cualquier modelo de datos
 
-- Without indexes → every query performs a full collection scan
-- With indexes → MongoDB jumps directly to matching documents
+MongoDB es una base de datos orientada a documentos sin esquema rígido (*schema-less*), lo que permite almacenar documentos flexibles directamente. Esta plantilla permite adaptar el proyecto a cualquier caso de uso (por ejemplo: catálogo de productos, usuarios, dispositivos IoT, métricas, etc.) en tres pasos:
 
-The `setup` command creates meaningful indexes and explains which query each one supports.
+1. **Definir tus índices y colección en [server/model.py](server/model.py)**:
+   - Modifica `DEFAULT_COLLECTION` con el nombre de tu colección principal.
+   - Configura tus índices en `ALL_INDEXES = [(colección, campos, opciones)]` para optimizar las consultas que requiera tu aplicación.
+   - Implementa o personaliza tus funciones de consulta e inserción según la lógica de tu negocio.
+2. **Personalizar endpoints en [server/resources.py](server/resources.py) y [server/app.py](server/app.py)**:
+   - Modifica `DataResource` o crea nuevos recursos Falcon según las entidades o filtros de tu modelo.
+   - Registra o actualiza las rutas con `app.add_route('/ruta', recurso)`.
+3. **Interactuar desde el cliente en [client/menu.py](client/menu.py)**:
+   - Agrega o ajusta las opciones del menú para solicitar los campos requeridos y llamar a los nuevos endpoints de tu API.
 
-## Setup
+---
 
-You will need **2 terminal windows**: one for the server, one for the CLI.
+## Puesta en Marcha
 
-### Step 1: Start MongoDB
+Se recomienda trabajar con **2 terminales**: una para mantener en ejecución el servidor ASGI y otra para utilizar el menú interactivo.
+
+### 1. Iniciar MongoDB con Docker
 
 ```bash
 docker run --name mongodb -p 27017:27017 -d mongo
 
-# Verify it started:
+# Verificar que el contenedor esté corriendo y responda al ping:
 docker exec -it mongodb mongosh --eval "db.runCommand({ping:1})"
 ```
 
-### Step 2: Install Dependencies
+### 2. Entorno Virtual e Instalación de Dependencias
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate        # Linux/Mac
-# .\venv\Scripts\Activate.ps1   # Windows
+# Crear entorno virtual (si no existe)
+python3 -m venv .venv
 
+# Activar entorno virtual
+source .venv/bin/activate       # En Linux / macOS
+# .venv\Scripts\activate        # En Windows
+
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### Step 3: Start the API Server
+### 3. Iniciar el Servidor de la API REST
+
+En la primera terminal:
 
 ```bash
 cd server
 uvicorn app:app --reload --port 8001
 ```
 
-### Step 4: Create Indexes
+El servidor quedará disponible en `http://localhost:8001`.
+
+### 4. Ejecutar el Cliente Interactivo
+
+En la segunda terminal (con el entorno virtual activado):
 
 ```bash
 cd client
-source ../venv/bin/activate
-
-python cli.py setup
+python menu.py
 ```
 
-### Step 5: Load Demo Books
-
+O directamente desde la raíz del repositorio:
 ```bash
-python cli.py seed --limit 100
+python client/menu.py
 ```
 
-## CLI Commands
+---
 
-### Admin
+## Opciones del Cliente Interactivo (`menu.py`)
 
-| Command | Description |
-|---------|-------------|
-| `status` | Check if API is running |
-| `setup` | Create indexes on books collection |
-| `seed --limit N` | Load N books from CSV (default 100) |
+El cliente por consola ofrece un menú en bucle que permite probar de inmediato las operaciones básicas:
 
-### Bookstore Actions
+| Opción | Acción | Petición REST |
+|--------|--------|---------------|
+| **1** | Verificar estado del servidor | `GET /health` |
+| **2** | Inicializar base de datos / índices | `POST /setup` (crea índices configurados) |
+| **3** | Consultar registros | `GET /data` |
+| **4** | Insertar un nuevo registro | `POST /data` (solicita los campos e inserta el documento) |
+| **5** | Consultar un registro por ID | `GET /data/{id}` |
+| **6** | Eliminar un registro por ID | `DELETE /data/{id}` |
+| **0** | Salir | Cierra el programa |
 
-| Command | Description |
-|---------|-------------|
-| `list` | List all books |
-| `list --rating N` | Books with rating >= N  (uses idx_rating) |
-| `list --language eng` | Books by language  (uses idx_language) |
-| `list --search "text"` | Full-text search  (uses idx_text_search) |
-| `get --id ID` | Get a specific book |
-| `add --title ... ` | Add a single book |
-| `update --id ID ...` | Update a book |
-| `delete --id ID` | Delete a book |
+---
 
-### Typical Session
+## Endpoints REST Disponibles
 
-```bash
-# Admin
-python cli.py setup
-python cli.py seed --limit 100
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET`  | `/health` | Verifica la salud del servicio y el estado de la conexión a MongoDB |
+| `POST` | `/setup`  | Crea los índices configurados en `ALL_INDEXES` |
+| `GET`  | `/data`   | Obtiene la lista de documentos almacenados (parámetro opcional: `?limit=N`) |
+| `POST` | `/data`   | Inserta un nuevo documento directamente a partir de un cuerpo JSON |
+| `GET`  | `/data/{id}` | Consulta un documento específico por su `_id` |
+| `DELETE` | `/data/{id}` | Elimina un documento específico por su `_id` |
 
-# Browse books
-python cli.py list
-python cli.py list --rating 4.5
-python cli.py list --language eng
-python cli.py list --search "Harry Potter"
-
-# Manage a book
-python cli.py get --id <id>
-python cli.py delete --id <id>
-```
-
-## REST API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| POST | `/setup` | Create indexes |
-| POST | `/seed` | Load demo books |
-| GET | `/books` | List books (rating, language, search filters) |
-| POST | `/books` | Add a book |
-| GET | `/books/{id}` | Get a book |
-| PUT | `/books/{id}` | Update a book |
-| DELETE | `/books/{id}` | Delete a book |
-
-### Example API Calls
+### Ejemplos con `curl`
 
 ```bash
+# 1. Comprobar salud del servicio
 curl http://localhost:8001/health
+
+# 2. Inicializar índices
 curl -X POST http://localhost:8001/setup
-curl -X POST http://localhost:8001/seed -H "Content-Type: application/json" -d '{"limit": 50}'
-curl http://localhost:8001/books
-curl "http://localhost:8001/books?rating=4.5"
-curl "http://localhost:8001/books?language=eng"
-curl "http://localhost:8001/books?search=Harry+Potter"
-curl http://localhost:8001/books/<id>
+
+# 3. Consultar documentos existentes
+curl http://localhost:8001/data
+
+# 4. Insertar un documento
+curl -X POST http://localhost:8001/data \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "Elemento A", "categoria": "General", "valor": "99.9"}'
+
+# 5. Consultar un documento por ID
+curl http://localhost:8001/data/<id>
+
+# 6. Eliminar un documento por ID
+curl -X DELETE http://localhost:8001/data/<id>
 ```
 
-## Data Model
+---
 
-Books are stored as documents:
+## Variables de Entorno
 
-```json
-{
-    "_id": "ObjectId (auto-generated)",
-    "title": "Harry Potter and the Chamber of Secrets",
-    "authors": ["J.K. Rowling"],
-    "average_rating": 4.42,
-    "isbn": "0439554896",
-    "isbn13": "9780439554893",
-    "language_code": "eng",
-    "num_pages": 352,
-    "ratings_count": 6333,
-    "text_reviews_count": 244,
-    "publication_date": "11/1/2003",
-    "publisher": "Scholastic"
-}
-```
+| Variable | Valor por defecto | Descripción |
+|----------|-------------------|-------------|
+| `API_URL` | `http://localhost:8001` | URL base de la API utilizada por el cliente |
+| `MONGODB_HOST` | `localhost` | Host o dirección IP de la instancia de MongoDB |
+| `MONGODB_PORT` | `27017` | Puerto de conexión a MongoDB |
+| `MONGODB_DATABASE` | `app_db` | Nombre de la base de datos a utilizar |
 
-## Environment Variables
+---
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_URL` | `http://localhost:8001` | API URL (client) |
-| `MONGODB_HOST` | `localhost` | MongoDB host (server) |
-| `MONGODB_PORT` | `27017` | MongoDB port (server) |
-| `MONGODB_DATABASE` | `bookstore` | Database name (server) |
+## Solución de Problemas
 
-## Troubleshooting
-
-**"Cannot connect to API"** — make sure the server is running: `cd server && uvicorn app:app --reload --port 8001`
-
-**"Cannot connect to MongoDB"** — check Docker: `docker ps` then `docker exec -it mongodb mongosh`
-
-**"No books found"** — run `setup` then `seed` first
+- **"No se pudo conectar con el servidor"**: Asegúrate de haber iniciado el servidor con `uvicorn app:app --reload --port 8001` dentro de la carpeta `server/`.
+- **"Fallo al conectar con MongoDB"**: Verifica que el contenedor de Docker esté iniciado ejecutando `docker ps`. Si no está activo, inícialo con `docker start mongodb`.
+- **"ModuleNotFoundError: No module named 'falcon'"**: Verifica que tu terminal tenga activo el entorno virtual (`source .venv/bin/activate`).
