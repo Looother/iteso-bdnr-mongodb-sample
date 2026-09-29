@@ -1,6 +1,6 @@
 # ITESO BDNR - MongoDB Sample (Rama Esqueleto)
 
-Plantilla y arquitectura base modular diseñada para implementar de forma sencilla cualquier modelo de datos en MongoDB, utilizando una arquitectura cliente-servidor con una API REST en Python (Falcon ASGI) y un cliente de consola interactivo.
+Plantilla y arquitectura base cualquier modelo de datos en MongoDB, utilizando una arquitectura cliente-servidor con una API REST en Python (Falcon ASGI) y un cliente de consola interactivo.
 
 ---
 
